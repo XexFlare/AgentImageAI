@@ -1,12 +1,15 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import io
 import json
 import time
 import urllib.request
+import zipfile
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from backend.openai_helper import interpret_message, plan_search
@@ -31,8 +34,12 @@ app.add_middleware(
 app.mount("/images", StaticFiles(directory="images"), name="images")
 
 
+USERS_FILE = Path("users.json")
+
+
 class ChatRequest(BaseModel):
     message: str
+    max_images: int = 20
 
 
 def load_usage() -> dict:
@@ -75,26 +82,85 @@ def check_rate_limit(ip: str):
     save_usage(data)
 
 
+IMAGES_DIR = Path("images")
+
+
+@app.get("/download/{folder:path}")
+def download_dataset(folder: str):
+    dataset_path = (IMAGES_DIR / folder).resolve()
+    if not dataset_path.exists() or not dataset_path.is_dir():
+        raise HTTPException(status_code=404, detail="Dataset folder not found")
+    if not str(dataset_path).startswith(str(IMAGES_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid folder path")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file in dataset_path.rglob("*"):
+            if file.is_file():
+                zf.write(file, file.relative_to(dataset_path))
+    buf.seek(0)
+
+    zip_name = dataset_path.name + ".zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={zip_name}"},
+    )
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/login")
+def login(request: LoginRequest):
+    users = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+    user = next(
+        (u for u in users if u["username"] == request.username and u["password"] == request.password),
+        None,
+    )
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {
+        "username": user["username"],
+        "firstname": user["firstname"],
+        "lastname": user["lastname"],
+        "jobTitle": user["jobTitle"],
+    }
+
+
 @app.get("/")
 def root():
     return {"message": "AgentImage AI running"}
 
 
-@app.post("/chat")
-def chat(request: ChatRequest, http_request: Request):
+@app.post("/chat-stream")
+def chat_stream(request: ChatRequest, http_request: Request):
     if not DEV_MODE:
         ip = http_request.client.host
         check_rate_limit(ip)
 
-    try:
-        result = interpret_message(request.message)
-        saved_paths = []
-        if result.get("intent") == "new_search":
-            plan = plan_search(request.message)
-            batches = [(search_images(f"{request.message} {item}"), item) for item in plan["items"]]
-            saved_paths = download_images(batches, topic=request.message, input_type=plan["input_type"])
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    return {"result": result, "images": saved_paths}
+    items = [line.strip() for line in request.message.splitlines() if line.strip()]
+    if not items:
+        items = [request.message.strip()]
+
+    def event_stream():
+        groups = []
+        dataset_folder = None
+        for item in items:
+            yield json.dumps({"event": "start", "label": item}) + "\n"
+            try:
+                result = interpret_message(item)
+                if result.get("intent") == "new_search":
+                    plan = plan_search(item)
+                    batches = [(search_images(f"{item} {term}"), term) for term in plan["items"]]
+                    saved_paths, dataset_folder = download_images(batches, topic=item, input_type=plan["input_type"], max_images=request.max_images)
+                    groups.append({"label": item, "images": saved_paths})
+            except Exception as e:
+                yield json.dumps({"event": "error", "label": item, "detail": str(e)}) + "\n"
+                continue
+            yield json.dumps({"event": "done", "label": item}) + "\n"
+        yield json.dumps({"event": "complete", "groups": groups, "dataset_folder": dataset_folder}) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="text/plain")

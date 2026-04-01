@@ -27,6 +27,7 @@ def download_images(
     batches: list[tuple[list[str], str]],
     topic: str,
     input_type: str,
+    max_images: int = 20,
 ) -> list[str]:
     """Download images for multiple (urls, item) batches into a versioned dataset folder.
 
@@ -34,6 +35,7 @@ def download_images(
         batches:    list of (urls, item) tuples where item is the planned search term
         topic:      original user message, used to name the dataset folder
         input_type: category label from the planning stage (e.g. "real-world entities")
+        max_images: maximum total images to download across all batches
 
     Returns:
         list of saved filenames
@@ -47,7 +49,11 @@ def download_images(
     image_index = 1
 
     for urls, item in batches:
+        if len(rows) >= max_images:
+            break
         for img in urls:
+            if len(rows) >= max_images:
+                break
             url = img["url"]
             raw_ext = os.path.splitext(url.split("?")[0])[-1].lower()
             ext = raw_ext if raw_ext in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
@@ -71,4 +77,4 @@ def download_images(
         writer.writeheader()
         writer.writerows(rows)
 
-    return [row["relative_path"] for row in rows]
+    return [row["relative_path"] for row in rows], f"{base_name}/{dataset_name}"

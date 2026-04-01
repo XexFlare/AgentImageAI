@@ -14,5 +14,5 @@ def search_images(query: str, per_page: int = 5) -> list[str]:
     response.raise_for_status()
     photos = response.json().get("photos", [])
     pexels_results = [{"url": photo["src"]["large"], "query": query, "source": "pexels"} for photo in photos]
-    bing_results = search_bing_images_browser(query + " Malawi hotel exterior building")
+    bing_results = search_bing_images_browser(query)
     return pexels_results + bing_results
