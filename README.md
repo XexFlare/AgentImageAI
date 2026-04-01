@@ -29,7 +29,7 @@ Agent Image is an AI-powered tool that transforms natural language prompts into 
 
 ## Status
 
-MVP done. Demo site soon.
+MVP done. Demo site:
 www.AgentImage.AIage.app
 
 ## Setup (coming soon)
