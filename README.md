@@ -1,6 +1,6 @@
-# ImageAgent 🖼️🖼️🚀
+# AgentImage 🖼️🖼️🚀
 
-ImageAgent is an AI-powered tool that transforms natural language prompts into structured image datasets.
+Agent Image is an AI-powered tool that transforms natural language prompts into structured image datasets.
 
 ## Features
 
@@ -27,7 +27,7 @@ ImageAgent is an AI-powered tool that transforms natural language prompts into s
 
 ## Status
 
-MVP in progress
+MVP done. Uploading to demo site soon.
 
 ## Setup (coming soon)
 
