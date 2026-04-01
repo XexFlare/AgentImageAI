@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+from pathlib import Path
 import requests
 
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "images")
@@ -46,21 +47,28 @@ def download_images(
     image_index = 1
 
     for urls, item in batches:
-        for url in urls:
-            ext = os.path.splitext(url.split("?")[0])[-1] or ".jpg"
+        for img in urls:
+            url = img["url"]
+            raw_ext = os.path.splitext(url.split("?")[0])[-1].lower()
+            ext = raw_ext if raw_ext in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
             filename = f"{dataset_name}_{image_index}{ext}"
             filepath = os.path.join(dataset_path, filename)
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            with open(filepath, "wb") as f:
-                f.write(response.content)
-            rows.append({"filename": filename, "item": item, "input_type": input_type, "original_query": topic})
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                with open(filepath, "wb") as f:
+                    f.write(response.content)
+            except Exception as e:
+                print(f"[skip] Failed to download {url}: {e}")
+                continue
+            relative_path = str(Path(filepath).resolve().relative_to(Path(IMAGES_DIR).resolve())).replace("\\", "/")
+            rows.append({"filename": filename, "relative_path": relative_path, "item": item, "input_type": input_type, "original_query": topic})
             image_index += 1
 
     csv_path = os.path.join(dataset_path, f"{dataset_name}.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["filename", "original_query", "item", "input_type"])
+        writer = csv.DictWriter(f, fieldnames=["filename", "relative_path", "item", "input_type", "original_query"])
         writer.writeheader()
         writer.writerows(rows)
 
-    return [row["filename"] for row in rows]
+    return [row["relative_path"] for row in rows]

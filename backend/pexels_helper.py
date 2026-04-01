@@ -1,5 +1,6 @@
 import os
 import requests
+from backend.bing_browser import search_bing_images_browser
 
 PEXELS_API_URL = "https://api.pexels.com/v1/search"
 
@@ -12,4 +13,6 @@ def search_images(query: str, per_page: int = 5) -> list[str]:
     )
     response.raise_for_status()
     photos = response.json().get("photos", [])
-    return [photo["src"]["large"] for photo in photos]
+    pexels_results = [{"url": photo["src"]["large"], "query": query, "source": "pexels"} for photo in photos]
+    bing_results = search_bing_images_browser(query + " Malawi hotel exterior building")
+    return pexels_results + bing_results
