@@ -23,11 +23,14 @@ Agent Image is an AI-powered tool that transforms natural language prompts into 
 * FastAPI (backend)
 * React (frontend)
 * OpenAI / OpenRouter (LLM)
+* Microsoft Bing API (images)
 * Pexels API (images)
+
 
 ## Status
 
-MVP done. Uploading to demo site soon.
+MVP done. Demo site soon.
+www.AgentImage.AIage.app
 
 ## Setup (coming soon)
 
